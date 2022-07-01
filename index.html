@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <style>
+        #progress {
+            width: 300px;
+            height: 20px;
+            background-color: #f7f7f7;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            background-image: linear-gradient(to bottom, #f5f5f5, #f9f9f9);
+        }
+
+        .finish {
+            background-color: #149bdf;
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+            background-size: 40px 40px;
+            height: 100%;
+        }
+
+        form {
+            margin-top: 50px;
+        }
+    </style>
+    <script src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+</head>
+<body>
+
+<div id="progress">
+    <div id="finish_video" class="finish" style="width: 0%;" progress="0"></div>
+    <input type="hidden" name="VideoName" id="VideoName">
+</div>
+<div class="btn-group">
+    <input id="video_file" type="file" class="file-input" style="visibility: hidden">
+    <span class="btn btn-info btn-upload" style="float:left;"
+          onclick="$(this).prev('input').trigger('click'); ">上传视频</span>
+</div>
+
+<script>
+    //分片上传
+    //上传视频
+    var fileNameTime = Date.parse(new Date()) / 1000;
+
+    var video_file = document.getElementById("video_file");
+    var jdt_s = document.getElementById('finish_video');
+    var ipt_s = $('#VideoName');
+    var video_upload = new Upload(jdt_s, ipt_s);
+    video_file.onchange = function () {
+        fileNameTime = fileNameTime + 1;
+        video_upload.addFileAndSend(this);
+    };
+
+    function Upload(jdt, ipt) {
+        const LENGTH = 1024 * 1024 * 5;
+        var start = 0;
+        var end = start + LENGTH;
+        var blob;
+        var blob_num = 1;
+        var is_stop = 0;
+        //对外方法，传入文件对象
+        this.addFileAndSend = function (that) {
+            var file = that.files[0];
+            blob = cutFile(file);
+            sendFile(blob, file);
+            blob_num += 1;
+        };
+
+        //切割文件
+        function cutFile(file) {
+            var file_blob = file.slice(start, end);
+            start = end;
+            end = start + LENGTH;
+            return file_blob;
+        }
+
+        //发送文件
+        function sendFile(blob, file) {
+            var xhr = new XMLHttpRequest();
+            var form_data = new FormData();
+            var total_blob_num = Math.ceil(file.size / LENGTH);
+            form_data.append('file', blob);
+            form_data.append('blob_num', blob_num);
+            form_data.append('total_blob_num', total_blob_num);
+            form_data.append('file_name', fileNameTime + file.name.substr(file.name.lastIndexOf(".")));
+
+            xhr.open('POST', 'upload.php', false);
+            xhr.onreadystatechange = function () {
+                var progress;
+                var progressObj = jdt;
+                if (total_blob_num === 1) {
+                    progress = '100%';
+                } else {
+                    progress = Math.min(100, (blob_num / total_blob_num) * 100) + '%';
+                }
+                progressObj.style.width = progress;
+                progressObj.innerHTML = progress;
+
+                var t = setTimeout(function () {
+                    console.log(xhr.response)
+                    var pathReturnObj = JSON.parse(xhr.response);
+                    ipt.val(pathReturnObj.file_path);
+                    if (pathReturnObj.code === 2 || pathReturnObj.code === 1) {
+                        // console.log(pathReturnObj)
+                        if (start < file.size && is_stop === 0) {
+                            blob = cutFile(file);
+                            sendFile(blob, file);
+                            blob_num += 1;
+                        }
+                        if (pathReturnObj.code === 2) alert('上传成功');
+                    }
+                    if (pathReturnObj.code === 0) {
+                        alert('上传失败');
+                    }
+                    xhr = undefined;
+                    form_data = undefined;
+                }, 500);
+            };
+            xhr.send(form_data);
+        }
+    }
+
+</script>
+
+
+</body>
+</html>
